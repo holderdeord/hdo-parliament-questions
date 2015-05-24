@@ -1,0 +1,27 @@
+{
+  "name": "hdo-parliament-questions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "hdo-parliament-questions": "cli.js"
+  },
+  "dependencies": {
+    "bluebird": "^2.9.25",
+    "csv": "^0.4.2",
+    "elasticsearch": "^4.1.0",
+    "elasticsearch-streams": "0.0.9",
+    "flat": "^1.5.1",
+    "glob": "^5.0.9",
+    "lodash": "^3.9.1",
+    "moment": "^2.10.3",
+    "request": "^2.55.0",
+    "xtend": "^4.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "jari@holderdeord.no",
+  "license": "BSD-3-Clause"
+}
