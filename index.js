@@ -48,7 +48,7 @@ module.exports = function(opts) {
   };
 
   var download = function() {
-    request('http://data.stortinget.no/eksport/sesjoner?format=json')
+    return request('http://data.stortinget.no/eksport/sesjoner?format=json')
       .spread(function(response, body) {
         var sessions = JSON.parse(body).sesjoner_liste.map(function(d) { return d.id; });
 
