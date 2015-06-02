@@ -13,6 +13,11 @@ switch (cmd) {
       .pipe(process.stdout)
       .on('error', process.exit)
     break;
+  case 'stats':
+    questions
+      .stats({query: process.argv[3] || '*'})
+      .then(console.log)
+    break;
   case 'download':
     questions.download();
     break;
@@ -36,7 +41,12 @@ switch (cmd) {
       .then(questions.download)
       .then(questions.index);
     break;
+  case 'cron':
+    questions
+      .download({cached: true})
+      .then(questions.index);
+    break;
   default:
-    console.error('USAGE: hdo-parliament-questions download|create-index|index|reindex|redo');  
+    console.error('USAGE: hdo-parliament-questions download|create-index|index|reindex|redo|cron|search|stats');  
     process.exit(1);
 }

@@ -17,7 +17,9 @@ var TYPE = 'question';
 var DEFAULTS = {
     elasticsearch: process.env.BOXEN_ELASTICSEARCH_URL || 'http://localhost:9200',
     index: 'hdo-parliament-questions',
-    outputPath: path.resolve('./data')
+    outputPath: path.resolve('./data'),
+    concurrency: 10,
+    currentSession: '2014-2015'
 };
 
 var IGNORE_PATTERN = /^(versjon|.+\.(versjon|.+dato|kjoenn))$/;
@@ -30,24 +32,32 @@ module.exports = function(opts) {
     log: config.debug ? 'trace' : null
   });
 
-  var fetchSessionData = function(session, name) {
+  var fetchSessionData = function(session, name, opts) {
     var url = 'http://data.stortinget.no/eksport/' + name + '?sesjonid=' + session + '&format=json';
+    var out = path.join(config.outputPath, name + '.' + session + '.json');
 
-    return request({url: url, headers: {'User-Agent': 'hdo-node-fetcher | holderdeord.no'}})
-      .spread(function(response, body) {
-        if (response.statusCode !== 200) {
-          console.error('response code ' + response.statusCode + ' for ' + url);
-        }
+    return fs.statAsync(out).then(function(stat) {      
+      var notCached = !(opts && opts.cached && stat.isFile());
 
-        var out = path.join(config.outputPath, name + '.' + session + '.json');
+      if (notCached || session === config.currentSession) {
+        return request({
+            url: url, 
+            headers: {'User-Agent': 'hdo-node-fetcher | holderdeord.no'}
+          })
+          .spread(function(response, body) {
+            if (response.statusCode !== 200) {
+              console.error('response code ' + response.statusCode + ' for ' + url);
+            }
 
-        return fs.writeFileAsync(out, body).then(function() {
-          console.log(url, '=>', out);
-        });
-      });
+            return fs.writeFileAsync(out, body).then(function() {
+              console.log(url, '=>', out);
+            });
+          });
+      }
+    });
   };
 
-  var download = function() {
+  var download = function(opts) {
     return request('http://data.stortinget.no/eksport/sesjoner?format=json')
       .spread(function(response, body) {
         var sessions = JSON.parse(body).sesjoner_liste.map(function(d) { return d.id; });
@@ -56,16 +66,15 @@ module.exports = function(opts) {
           console.log(session);
 
           return Promise.join(
-            fetchSessionData(session, 'sporretimesporsmal'),
-            fetchSessionData(session, 'interpellasjoner'),
-            fetchSessionData(session, 'skriftligesporsmal')
+            fetchSessionData(session, 'sporretimesporsmal', opts),
+            fetchSessionData(session, 'interpellasjoner', opts),
+            fetchSessionData(session, 'skriftligesporsmal', opts)
           );
         });
       });
   };
 
   var createIndex = function(argument) {
-  
     return es.indices.create({
       index: config.index,
       body: {
@@ -139,7 +148,7 @@ module.exports = function(opts) {
 
   var indexAll = function() {
     return glob(path.join(config.outputPath, '*.json')).then(function(files) {
-      return Promise.map(files, indexFile, {concurrency: 10});
+      return Promise.map(files, indexFile, {concurrency: config.concurrency});
     });
   };
 
@@ -184,11 +193,45 @@ module.exports = function(opts) {
       .pipe(stringifier);
   };
 
+  var stats = function(opts) {
+    return es.search({
+      index: config.index,
+      body: {
+        query: {
+          query_string: {           
+            query: opts.query
+          }
+        },
+        aggregations: {
+          sessionCounts: {
+            terms: {
+              field: 'sesjon_id',
+              size: 200,
+            }
+          }
+        }
+      }
+    }).then(function(response) {
+      var rows = response.aggregations.sessionCounts.buckets.map(function(bucket) {        
+        return [bucket.key, bucket.doc_count];
+      });
+
+      rows = _.sortBy(rows, function(r) { return r[0]; });
+
+      return Promise.promisify(csv.stringify)(rows, {
+        delimiter: '\t', 
+        columns: ['session', 'count'],
+        header: true
+      });
+    });
+  };
+
   return {
     download: download,
     createIndex: createIndex,
     deleteIndex: deleteIndex,
     index: indexAll,
-    search: search
+    search: search,
+    stats: stats
   };
 };
