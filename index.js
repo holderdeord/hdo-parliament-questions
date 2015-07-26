@@ -36,12 +36,12 @@ module.exports = function(opts) {
     var url = 'http://data.stortinget.no/eksport/' + name + '?sesjonid=' + session + '&format=json';
     var out = path.join(config.outputPath, name + '.' + session + '.json');
 
-    return fs.statAsync(out).then(function(stat) {      
-      var notCached = !(opts && opts.cached && stat.isFile());
+    return fs.stat(out, function(err, stat) {
+      var notCached = err || !(opts && opts.cached && stat.isFile());
 
       if (notCached || session === config.currentSession) {
         return request({
-            url: url, 
+            url: url,
             headers: {'User-Agent': 'hdo-node-fetcher | holderdeord.no'}
           })
           .spread(function(response, body) {
@@ -49,9 +49,12 @@ module.exports = function(opts) {
               console.error('response code ' + response.statusCode + ' for ' + url);
             }
 
-            return fs.writeFileAsync(out, body).then(function() {
-              console.log(url, '=>', out);
-            });
+            return fs.writeFileAsync(out, body)
+              .then(function() {
+                console.log(url, '=>', out);
+              }).catch(function(err) {
+                throw new Error('unable to write ' + url + ' to ' + out + ': ' + err);
+              });
           });
       }
     });
@@ -159,7 +162,7 @@ module.exports = function(opts) {
   var search = function(opts) {
     var rs = new ReadableSearch(function(start, callback) {
        es.search({
-        index: config.index, 
+        index: config.index,
         body: {
           query: {
             query_string: {
@@ -170,14 +173,14 @@ module.exports = function(opts) {
           size: 100
         }
       }, callback);
-    }); 
-    
+    });
+
     var stringifier = csv.stringify({delimiter: '\t'});
 
     var columns;
 
     return rs
-      .pipe(csv.transform(function(record) {        
+      .pipe(csv.transform(function(record) {
         var source = record._source;
         source.emne_liste = source.emne_liste.map(function(e) { return e.navn; }).sort().join(',');
 
@@ -185,9 +188,9 @@ module.exports = function(opts) {
 
         if (!columns) {
           columns = Object.keys(flat).filter(function(k) { return !k.match(IGNORE_PATTERN); });
-          stringifier.write(columns);          
+          stringifier.write(columns);
         }
-        
+
         return columns.map(function(k) { return flat[k]; });
       }))
       .pipe(stringifier);
@@ -198,7 +201,7 @@ module.exports = function(opts) {
       index: config.index,
       body: {
         query: {
-          query_string: {           
+          query_string: {
             query: opts.query
           }
         },
@@ -212,14 +215,14 @@ module.exports = function(opts) {
         }
       }
     }).then(function(response) {
-      var rows = response.aggregations.sessionCounts.buckets.map(function(bucket) {        
+      var rows = response.aggregations.sessionCounts.buckets.map(function(bucket) {
         return [bucket.key, bucket.doc_count];
       });
 
       rows = _.sortBy(rows, function(r) { return r[0]; });
 
       return Promise.promisify(csv.stringify)(rows, {
-        delimiter: '\t', 
+        delimiter: '\t',
         columns: ['session', 'count'],
         header: true
       });
