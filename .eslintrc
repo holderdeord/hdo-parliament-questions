@@ -1,0 +1,15 @@
+{
+  "ecmaFeatures": {
+    "modules": true
+  },
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "parser": "babel-eslint",
+  "rules": {
+    "indent": [2, 4, {"SwitchCase": 1}],
+    "quotes": [2, "single"],
+    "strict": [2, "never"]
+  }
+}
